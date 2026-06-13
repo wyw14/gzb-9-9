@@ -41,3 +41,11 @@ export function createExchange(myItemId, targetItemId) {
 export function getMyExchanges(userId) {
   return api.get('/exchanges/my', { params: { userId } }).then(res => res.data)
 }
+
+export function saveExchangeNote(exchangeId, userId, content) {
+  return api.post(`/exchanges/${exchangeId}/note`, { userId, content }).then(res => res.data)
+}
+
+export function deleteExchangeNote(exchangeId, userId) {
+  return api.delete(`/exchanges/${exchangeId}/note`, { params: { userId } }).then(res => res.data)
+}

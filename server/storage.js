@@ -3,6 +3,7 @@ const path = require('path');
 
 const ITEMS_FILE = path.join(__dirname, 'data', 'items.json');
 const EXCHANGES_FILE = path.join(__dirname, 'data', 'exchanges.json');
+const NOTES_FILE = path.join(__dirname, 'data', 'notes.json');
 
 function readItems() {
   try {
@@ -30,9 +31,24 @@ function writeExchanges(exchanges) {
   fs.writeFileSync(EXCHANGES_FILE, JSON.stringify(exchanges, null, 2), 'utf-8');
 }
 
+function readNotes() {
+  try {
+    const data = fs.readFileSync(NOTES_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (err) {
+    return [];
+  }
+}
+
+function writeNotes(notes) {
+  fs.writeFileSync(NOTES_FILE, JSON.stringify(notes, null, 2), 'utf-8');
+}
+
 module.exports = {
   readItems,
   writeItems,
   readExchanges,
-  writeExchanges
+  writeExchanges,
+  readNotes,
+  writeNotes
 };

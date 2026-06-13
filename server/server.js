@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
-const { readItems, writeItems, readExchanges, writeExchanges } = require('./storage');
+const { readItems, writeItems, readExchanges, writeExchanges, readNotes, writeNotes } = require('./storage');
 
 const app = express();
 const PORT = 3441;
@@ -294,6 +294,7 @@ app.get('/api/exchanges/my', (req, res) => {
 
   const exchanges = readExchanges();
   const items = readItems();
+  const notes = readNotes();
 
   const myExchanges = exchanges
     .filter(e => e.item1Owner === userId || e.item2Owner === userId)
@@ -301,15 +302,88 @@ app.get('/api/exchanges/my', (req, res) => {
       const item1 = items.find(i => i.id === e.item1Id);
       const item2 = items.find(i => i.id === e.item2Id);
       const isItem1Owner = e.item1Owner === userId;
+      const myNote = notes.find(n => n.exchangeId === e.id && n.userId === userId);
       return {
         ...e,
         myItem: isItem1Owner ? item1 : item2,
         otherItem: isItem1Owner ? item2 : item1,
-        otherContact: isItem1Owner ? e.item2Contact : e.item1Contact
+        otherContact: isItem1Owner ? e.item2Contact : e.item1Contact,
+        myNote: myNote ? myNote.content : null
       };
     });
 
   res.json(myExchanges);
+});
+
+app.post('/api/exchanges/:id/note', (req, res) => {
+  const { id } = req.params;
+  const { userId, content } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: '缺少用户ID' });
+  }
+
+  const exchanges = readExchanges();
+  const exchange = exchanges.find(e => e.id === id);
+
+  if (!exchange) {
+    return res.status(404).json({ error: '交换记录不存在' });
+  }
+
+  if (exchange.item1Owner !== userId && exchange.item2Owner !== userId) {
+    return res.status(403).json({ error: '无权操作此交换记录' });
+  }
+
+  const notes = readNotes();
+  const existingNoteIndex = notes.findIndex(n => n.exchangeId === id && n.userId === userId);
+
+  if (existingNoteIndex !== -1) {
+    notes[existingNoteIndex].content = content;
+    notes[existingNoteIndex].updatedAt = new Date().toISOString();
+  } else {
+    notes.push({
+      id: uuidv4(),
+      exchangeId: id,
+      userId,
+      content,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  writeNotes(notes);
+
+  const myNote = notes.find(n => n.exchangeId === id && n.userId === userId);
+  res.json({ note: myNote });
+});
+
+app.delete('/api/exchanges/:id/note', (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.query;
+
+  if (!userId) {
+    return res.status(400).json({ error: '缺少用户ID' });
+  }
+
+  const notes = readNotes();
+  const noteIndex = notes.findIndex(n => n.exchangeId === id && n.userId === userId);
+
+  if (noteIndex === -1) {
+    return res.status(404).json({ error: '备注不存在' });
+  }
+
+  const note = notes[noteIndex];
+  const exchanges = readExchanges();
+  const exchange = exchanges.find(e => e.id === note.exchangeId);
+
+  if (exchange && exchange.item1Owner !== userId && exchange.item2Owner !== userId) {
+    return res.status(403).json({ error: '无权删除此备注' });
+  }
+
+  notes.splice(noteIndex, 1);
+  writeNotes(notes);
+
+  res.json({ message: '删除成功' });
 });
 
 app.delete('/api/items/:id', (req, res) => {

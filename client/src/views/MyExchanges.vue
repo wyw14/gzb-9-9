@@ -64,18 +64,59 @@
           <p style="color:#667eea;font-size:18px;font-weight:600;">{{ exc.otherContact }}</p>
           <p style="color:#999;font-size:12px;margin-top:8px;">请主动联系对方完成物品交换</p>
         </div>
+
+        <div style="margin-top:20px;padding:16px;background:linear-gradient(135deg,#fff9e6 0%,#fff3cd 100%);border-radius:8px;border:1px dashed #ffc107;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:18px;">📝</span>
+              <span style="font-weight:600;color:#856404;">私人小纸条</span>
+              <span style="font-size:11px;color:#856404;opacity:0.7;background:#ffeeba;padding:2px 6px;border-radius:10px;">仅自己可见</span>
+            </div>
+            <div>
+              <template v-if="!editingNote[exc.id] && exc.myNote">
+                <button class="btn-link" @click="startEditNote(exc)" style="margin-right:8px;">编辑</button>
+                <button class="btn-link btn-link-danger" @click="handleDeleteNote(exc)">删除</button>
+              </template>
+              <template v-else-if="!editingNote[exc.id]">
+                <button class="btn-link" @click="startEditNote(exc)">添加备注</button>
+              </template>
+            </div>
+          </div>
+
+          <template v-if="editingNote[exc.id]">
+            <textarea
+              v-model="noteDraft[exc.id]"
+              rows="3"
+              placeholder="记录一些只有你自己能看到的内容..."
+              style="width:100%;padding:10px;border:1px solid #ffc107;border-radius:6px;resize:vertical;font-size:14px;background:#fff;color:#333;box-sizing:border-box;font-family:inherit;"
+            ></textarea>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
+              <button class="btn btn-secondary" style="padding:6px 14px;font-size:13px;" @click="cancelEditNote(exc)">取消</button>
+              <button class="btn btn-primary" style="padding:6px 14px;font-size:13px;" @click="handleSaveNote(exc)" :disabled="savingNote[exc.id]">
+                {{ savingNote[exc.id] ? '保存中...' : '保存' }}
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <div v-if="exc.myNote" style="color:#856404;font-size:14px;line-height:1.6;white-space:pre-wrap;">{{ exc.myNote }}</div>
+            <div v-else style="color:#856404;opacity:0.6;font-size:13px;font-style:italic;">暂无备注，点击"添加备注"记录一下吧~</div>
+          </template>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { getMyExchanges, appendAuth } from '../api/index.js'
+import { ref, reactive, onMounted } from 'vue'
+import { getMyExchanges, appendAuth, saveExchangeNote, deleteExchangeNote } from '../api/index.js'
 import { userStore } from '../store/user.js'
 
 const exchanges = ref([])
 const loading = ref(true)
+const editingNote = reactive({})
+const noteDraft = reactive({})
+const savingNote = reactive({})
 
 function formatDate(dateStr) {
   const date = new Date(dateStr)
@@ -95,6 +136,45 @@ async function loadExchanges() {
     alert('加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+function startEditNote(exc) {
+  editingNote[exc.id] = true
+  noteDraft[exc.id] = exc.myNote || ''
+}
+
+function cancelEditNote(exc) {
+  editingNote[exc.id] = false
+  noteDraft[exc.id] = ''
+}
+
+async function handleSaveNote(exc) {
+  const content = (noteDraft[exc.id] || '').trim()
+  if (!content) {
+    alert('备注内容不能为空')
+    return
+  }
+  savingNote[exc.id] = true
+  try {
+    const res = await saveExchangeNote(exc.id, userStore.user.id, content)
+    exc.myNote = res.note.content
+    editingNote[exc.id] = false
+    noteDraft[exc.id] = ''
+  } catch (e) {
+    alert('保存失败：' + (e.response?.data?.error || e.message))
+  } finally {
+    savingNote[exc.id] = false
+  }
+}
+
+async function handleDeleteNote(exc) {
+  if (!confirm('确定要删除这条私人备注吗？')) return
+  try {
+    await deleteExchangeNote(exc.id, userStore.user.id)
+    exc.myNote = null
+  } catch (e) {
+    alert('删除失败：' + (e.response?.data?.error || e.message))
   }
 }
 
